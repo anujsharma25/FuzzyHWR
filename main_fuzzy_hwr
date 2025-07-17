@@ -1,0 +1,141 @@
+import torch
+import torch.nn as nn
+import torch_geometric.nn as pyg_nn
+from torch_geometric.data import Data
+import numpy as np
+from sklearn.model_selection import train_test_split
+
+def preprocess(raw_text_data):
+    # Placeholder for text preprocessing
+    # Returns a list of strokes
+    processed_strokes = [f"stroke_{i}" for i in range(len(raw_text_data))]
+    return processed_strokes
+
+def extract_chain_codes(strokes):
+    # Placeholder for chain code extraction
+    # f encodes relationship between consecutive strokes
+    chain_codes = []
+    for i in range(1, len(strokes)):
+        # Example: encode difference or relationship
+        code = f"code_{strokes[i-1]}_{strokes[i]}"
+        chain_codes.append(code)
+    return chain_codes
+
+def fuzzy_extract(chain_codes):
+    # Placeholder for fuzzy feature extraction
+    # Returns fuzzy-based features using fuzzy sets
+    fuzzy_features = []
+    for code in chain_codes:
+        # Example: assign dummy fuzzy membership values
+        mu = np.random.uniform(0, 1, size=5)  # 5 fuzzy features per code
+        fuzzy_features.append(mu)
+    return np.array(fuzzy_features)
+
+def construct_gnn_dataset(fuzzy_features, strokes):
+    # Construct graph: nodes are strokes, edges based on chain codes
+    edge_index = []
+    for i in range(len(strokes)-1):
+        edge_index.append([i, i+1])
+        edge_index.append([i+1, i])
+    edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous()
+    
+    # Node features from fuzzy features
+    x = torch.tensor(fuzzy_features, dtype=torch.float)
+    
+    # Placeholder labels (e.g., for classification)
+    y = torch.tensor([0] * len(strokes), dtype=torch.long)
+    
+    return Data(x=x, edge_index=edge_index, y=y)
+
+class GNNModel(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim):
+        super(GNNModel, self).__init__()
+        # Initialize GNN layers (using GCN as a placeholder)
+        self.conv1 = pyg_nn.GCNConv(input_dim, hidden_dim)
+        self.conv2 = pyg_nn.GCNConv(hidden_dim, output_dim)
+        
+        # Initialize parameters
+        self._initialize_weights()
+    
+    def _initialize_weights(self):
+        # Initialize weights with normal distribution
+        for module in self.modules():
+            if isinstance(module, pyg_nn.GCNConv):
+                nn.init.normal_(module.lin.weight, mean=0, std=0.01)
+                if module.bias is not None:
+                    nn.init.normal_(module.bias, mean=0, std=0.01)
+    
+    def forward(self, data):
+        x, edge_index = data.x, data.edge_index
+        x = torch.relu(self.conv1(x, edge_index))
+        x = self.conv2(x, edge_index)
+        return x
+
+def train_gnn(model, train_data, optimizer, criterion, epochs=100):
+    model.train()
+    cumulative_loss = 0.0
+    for epoch in range(epochs):
+        optimizer.zero_grad()
+        out = model(train_data)
+        loss = criterion(out, train_data.y)
+        cumulative_loss += loss.item()
+        
+        loss.backward()
+        optimizer.step()
+        
+        if (epoch + 1) % 10 == 0:
+            avg_loss = cumulative_loss / (epoch + 1)
+            print(f"Epoch {epoch + 1}, Average Loss: {avg_loss:.4f}")
+    
+    return model
+
+def predict_gnn(model, test_data):
+    model.eval()
+    with torch.no_grad():
+        predictions = model(test_data)
+    return predictions
+
+def main():
+    # Sample raw text data
+    raw_text_data = ["sample_text"] * 100  # Placeholder
+    
+    # Step 1: Preprocess
+    processed_strokes = preprocess(raw_text_data)
+    
+    # Step 2: Extract chain codes
+    chain_codes = extract_chain_codes(processed_strokes)
+    
+    # Step 3: Extract fuzzy-based features
+    fuzzy_features = fuzzy_extract(chain_codes)
+    
+    # Step 4: Construct GNN dataset
+    gnn_data = construct_gnn_dataset(fuzzy_features, processed_strokes)
+    
+    # Step 5: Split into train and test sets
+    train_idx, test_idx = train_test_split(range(len(processed_strokes)), test_size=0.2, random_state=42)
+    train_mask = torch.zeros(len(processed_strokes), dtype=torch.bool)
+    test_mask = torch.zeros(len(processed_strokes), dtype=torch.bool)
+    train_mask[train_idx] = True
+    test_mask[test_idx] = True
+    gnn_data.train_mask = train_mask
+    gnn_data.test_mask = test_mask
+    
+    # Step 6: Initialize model
+    input_dim = fuzzy_features.shape[1]  # Number of fuzzy features
+    hidden_dim = 16
+    output_dim = 2  # Example: binary classification
+    model = GNNModel(input_dim, hidden_dim, output_dim)
+    
+    # Step 7: Set loss and optimizer
+    criterion = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    
+    # Step 8: Train model
+    trained_model = train_gnn(model, gnn_data, optimizer, criterion)
+    
+    # Step 9: Predict on test data
+    predictions = predict_gnn(trained_model, gnn_data)
+    print("Test predictions:", predictions)
+
+if __name__ == "__main__":
+    main()
