@@ -1,0 +1,233 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+#include <time.h>
+
+#define MAX_STROKES 100
+#define FUZZY_FEATS 5
+#define HIDDEN_DIM 16
+#define OUTPUT_DIM 2
+#define MAX_NODES 100
+#define MAX_EDGES 200
+#define EPOCHS 100
+#define LEARNING_RATE 0.01
+
+// Struct for graph data
+typedef struct {
+    float node_features[MAX_NODES][FUZZY_FEATS];
+    int edge_index[MAX_EDGES][2];
+    int labels[MAX_NODES];
+    int num_nodes;
+    int num_edges;
+    int train_mask[MAX_NODES];
+    int test_mask[MAX_NODES];
+} GraphData;
+
+// Struct for GNN model
+typedef struct {
+    float weights1[FUZZY_FEATS][HIDDEN_DIM];
+    float bias1[HIDDEN_DIM];
+    float weights2[HIDDEN_DIM][OUTPUT_DIM];
+    float bias2[OUTPUT_DIM];
+} GNNModel;
+
+// Initialize random seed
+void init_random() {
+    srand(time(NULL));
+}
+
+// Generate random float between 0 and 1
+float rand_float() {
+    return (float)rand() / RAND_MAX;
+}
+
+// Initialize model parameters with normal distribution (simplified)
+void initialize_weights(GNNModel *model) {
+    float std = 0.01;
+    for (int i = 0; i < FUZZY_FEATS; i++)
+        for (int j = 0; j < HIDDEN_DIM; j++)
+            model->weights1[i][j] = rand_float() * std * 2 - std;
+    for (int i = 0; i < HIDDEN_DIM; i++)
+        model->bias1[i] = rand_float() * std * 2 - std;
+    for (int i = 0; i < HIDDEN_DIM; i++)
+        for (int j = 0; j < OUTPUT_DIM; j++)
+            model->weights2[i][j] = rand_float() * std * 2 - std;
+    for (int i = 0; i < OUTPUT_DIM; i++)
+        model->bias2[i] = rand_float() * std * 2 - std;
+}
+
+// Placeholder for preprocessing
+void preprocess(const char *raw_text_data, int len, char strokes[][32]) {
+    for (int i = 0; i < len; i++) {
+        snprintf(strokes[i], 32, "stroke_%d", i);
+    }
+}
+
+// Placeholder for chain code extraction
+void extract_chain_codes(char strokes[][32], int num_strokes, char chain_codes[][64]) {
+    for (int i = 1; i < num_strokes; i++) {
+        snprintf(chain_codes[i-1], 64, "code_%s_%s", strokes[i-1], strokes[i]);
+    }
+}
+
+// Placeholder for fuzzy feature extraction
+void fuzzy_extract(char chain_codes[][64], int num_codes, float fuzzy_features[][FUZZY_FEATS]) {
+    for (int i = 0; i < num_codes; i++) {
+        for (int j = 0; j < FUZZY_FEATS; j++) {
+            fuzzy_features[i][j] = rand_float();
+        }
+    }
+}
+
+// Construct graph dataset
+void construct_gnn_dataset(float fuzzy_features[][FUZZY_FEATS], int num_nodes, GraphData *data) {
+    data->num_nodes = num_nodes;
+    data->num_edges = (num_nodes - 1) * 2;
+    
+    // Copy node features
+    for (int i = 0; i < num_nodes; i++)
+        for (int j = 0; j < FUZZY_FEATS; j++)
+            data->node_features[i][j] = i < num_nodes - 1 ? fuzzy_features[i][j] : 0.0;
+    
+    // Create edges (bidirectional)
+    for (int i = 0; i < num_nodes - 1; i++) {
+        data->edge_index[2*i][0] = i;
+        data->edge_index[2*i][1] = i + 1;
+        data->edge_index[2*i+1][0] = i + 1;
+        data->edge_index[2*i+1][1] = i;
+    }
+    
+    // Dummy labels
+    for (int i = 0; i < num_nodes; i++)
+        data->labels[i] = 0;
+    
+    // Train-test split (80-20)
+    for (int i = 0; i < num_nodes; i++) {
+        data->train_mask[i] = i < 0.8 * num_nodes ? 1 : 0;
+        data->test_mask[i] = i >= 0.8 * num_nodes ? 1 : 0;
+    }
+}
+
+// Simplified ReLU
+float relu(float x) {
+    return x > 0 ? x : 0;
+}
+
+// GNN forward pass (simplified, no message passing)
+void gnn_forward(GNNModel *model, GraphData *data, float output[][OUTPUT_DIM]) {
+    float hidden[MAX_NODES][HIDDEN_DIM] = {0};
+    
+    // First layer
+    for (int i = 0; i < data->num_nodes; i++) {
+        for (int j = 0; j < HIDDEN_DIM; j++) {
+            float sum = model->bias1[j];
+            for (int k = 0; k < FUZZY_FEATS; k++)
+                sum += data->node_features[i][k] * model->weights1[k][j];
+            hidden[i][j] = relu(sum);
+        }
+    }
+    
+    // Second layer
+    for (int i = 0; i < data->num_nodes; i++) {
+        for (int j = 0; j < OUTPUT_DIM; j++) {
+            float sum = model->bias2[j];
+            for (int k = 0; k < HIDDEN_DIM; k++)
+                sum += hidden[i][k] * model->weights2[k][j];
+            output[i][j] = sum; // No activation for output
+        }
+    }
+}
+
+// Cross-entropy loss (simplified)
+float compute_loss(float output[][OUTPUT_DIM], int labels[], int num_nodes) {
+    float loss = 0.0;
+    for (int i = 0; i < num_nodes; i++) {
+        float exp_sum = 0.0;
+        for (int j = 0; j < OUTPUT_DIM; j++)
+            exp_sum += exp(output[i][j]);
+        loss -= log(exp(output[i][labels[i]]) / exp_sum);
+    }
+    return loss / num_nodes;
+}
+
+// Simplified gradient update (placeholder)
+void update_weights(GNNModel *model, float output[][OUTPUT_DIM], int labels[], int num_nodes) {
+    // Gradient computation and weight update are simplified
+    // In practice, implement backpropagation manually
+    for (int i = 0; i < FUZZY_FEATS; i++)
+        for (int j = 0; j < HIDDEN_DIM; j++)
+            model->weights1[i][j] -= LEARNING_RATE * (rand_float() - 0.5) * 0.01;
+    for (int i = 0; i < HIDDEN_DIM; i++)
+        model->bias1[i] -= LEARNING_RATE * (rand_float() - 0.5) * 0.01;
+    for (int i = 0; i < HIDDEN_DIM; i++)
+        for (int j = 0; j < OUTPUT_DIM; j++)
+            model->weights2[i][j] -= LEARNING_RATE * (rand_float() - 0.5) * 0.01;
+    for (int i = 0; i < OUTPUT_DIM; i++)
+        model->bias2[i] -= LEARNING_RATE * (rand_float() - 0.5) * 0.01;
+}
+
+// Train GNN
+void train_gnn(GNNModel *model, GraphData *data) {
+    float cumulative_loss = 0.0;
+    for (int epoch = 0; epoch < EPOCHS; epoch++) {
+        float output[MAX_NODES][OUTPUT_DIM] = {0};
+        gnn_forward(model, data, output);
+        float loss = compute_loss(output, data->labels, data->num_nodes);
+        cumulative_loss += loss;
+        update_weights(model, output, data->labels, data->num_nodes);
+        
+        if ((epoch + 1) % 10 == 0) {
+            float avg_loss = cumulative_loss / (epoch + 1);
+            printf("Epoch %d, Average Loss: %.4f\n", epoch + 1, avg_loss);
+        }
+    }
+}
+
+// Predict on test data
+void predict_gnn(GNNModel *model, GraphData *data, float predictions[][OUTPUT_DIM]) {
+    gnn_forward(model, data, predictions);
+}
+
+int main() {
+    init_random();
+    
+    // Sample raw text data
+    char raw_text_data[MAX_STROKES][32];
+    for (int i = 0; i < MAX_STROKES; i++)
+        snprintf(raw_text_data[i], 32, "sample_text_%d", i);
+    
+    // Step 1: Preprocess
+    char strokes[MAX_STROKES][32];
+    preprocess(raw_text_data, MAX_STROKES, strokes);
+    
+    // Step 2: Extract chain codes
+    char chain_codes[MAX_STROKES-1][64];
+    extract_chain_codes(strokes, MAX_STROKES, chain_codes);
+    
+    // Step 3: Extract fuzzy-based features
+    float fuzzy_features[MAX_STROKES-1][FUZZY_FEATS];
+    fuzzy_extract(chain_codes, MAX_STROKES-1, fuzzy_features);
+    
+    // Step 4: Construct GNN dataset
+    GraphData data = {0};
+    construct_gnn_dataset(fuzzy_features, MAX_STROKES, &data);
+    
+    // Step 5: Initialize model
+    GNNModel model = {0};
+    initialize_weights(&model);
+    
+    // Step 6: Train model
+    train_gnn(&model, &data);
+    
+    // Step 7: Predict on test data
+    float predictions[MAX_NODES][OUTPUT_DIM] = {0};
+    predict_gnn(&model, &data, predictions);
+    
+    printf("Test predictions (first 5 nodes):\n");
+    for (int i = 0; i < 5 && i < data.num_nodes; i++) {
+        printf("Node %d: [%.4f, %.4f]\n", i, predictions[i][0], predictions[i][1]);
+    }
+    
+    return 0;
+}
