@@ -26,7 +26,9 @@ def fuzzy_extract(chain_codes):
     # Returns fuzzy-based features using fuzzy sets
     fuzzy_features = []
     for code in chain_codes:
-        # Example: assign dummy fuzzy membership values
+        # use mu value as fuzzified from directions, frequency and position values as retrieved from
+        # recovery of drawing order methods, otherwise for trial use random values
+        # mu = extract_fuzzy_values(chain_codes)
         mu = np.random.uniform(0, 1, size=5)  # 5 fuzzy features per code
         fuzzy_features.append(mu)
     return np.array(fuzzy_features)
